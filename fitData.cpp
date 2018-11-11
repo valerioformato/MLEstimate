@@ -14,8 +14,7 @@ struct measurement {
 
 measurement fitAnalytical(TTree *tree);
 measurement fitScanLL(TTree *tree);
-measurement fitMinuit(TTree *tree);
-measurement fitMinuit2(TTree *tree);
+measurement fitMinuit(TTree *tree, std::string version);
 
 void DivideByBinWidth(TH1 *hist) {
   for (int ibin = 0; ibin < hist->GetNbinsX(); ibin++) {
@@ -63,7 +62,21 @@ void fitData() {
   hist->Draw("E");
   fun->Draw("SAME");
   auto tauLL = fitScanLL(tree);
-  ccA->Print("plots/plot2_LL.pdf");
+  ccL->Print("plots/plot2_LL.pdf");
+
+  auto ccM = new TCanvas("ccM", "Minuit");
+  ccM->Draw();
+  hist->Draw("E");
+  fun->Draw("SAME");
+  auto tauMinuit = fitMinuit(tree, "Minuit");
+  ccM->Print("plots/plot2_Minuit.pdf");
+
+  auto ccM2 = new TCanvas("ccM2", "Minuit");
+  ccM2->Draw();
+  hist->Draw("E");
+  fun->Draw("SAME");
+  auto tauMinuit2 = fitMinuit(tree, "Minuit2");
+  ccM2->Print("plots/plot2_Minuit2.pdf");
 }
 
 measurement fitAnalytical(TTree *tree) {
@@ -163,7 +176,7 @@ measurement fitScanLL(TTree *tree) {
   l1->SetLineColor(2);
   l1->Draw("SAME");
 
-  auto l2 = new TLine(t1, ll-0.5, t2, ll-0.5);
+  auto l2 = new TLine(t1, ll - 0.5, t2, ll - 0.5);
   l2->SetLineColor(2);
   l2->SetLineStyle(2);
   l2->Draw("SAME");
@@ -171,4 +184,64 @@ measurement fitScanLL(TTree *tree) {
   _cc->Print("plots/plot2_LLscan.pdf");
 
   return tauLL;
+}
+
+measurement fitMinuit(TTree *tree, std::string method) {
+  //create wrapper class for lilelihood
+  class LL {
+  public:
+    LL(TTree *tree) : _tree(tree){};
+
+    void SetTree(TTree *tree) { _tree = tree; };
+
+    //this is particularly important
+    double operator()(const double *_tau) {
+      double ll = 0;
+      float t = 0;
+      _tree->SetBranchAddress("time", &t);
+      Long64_t nEv = _tree->GetEntries();
+      for (Long64_t iEv = 0; iEv < nEv; iEv++) {
+        _tree->GetEntry(iEv);
+        ll -= log(1. / *_tau * exp(-t / *_tau));
+      }
+      return ll;
+    }
+
+  private:
+    TTree *_tree;
+  };
+
+  auto lfun = new LL(tree);
+  Long64_t nEv = tree->GetEntries();
+
+  measurement tauMinuit;
+  tauMinuit.name = "tau";
+
+  auto minimizer = ROOT::Math::Factory::CreateMinimizer(method, "Migrad");
+  minimizer->SetMaxFunctionCalls(1000000);
+  minimizer->SetTolerance(0.001);
+  minimizer->SetPrintLevel(1);
+
+  ROOT::Math::Functor fcn(*lfun, 1);
+  double step[1] = {1e-9};
+  double _tau[1] = {1e-6};
+
+  minimizer->SetFunction(fcn);
+  minimizer->SetVariable(0, "tau", _tau[0], step[0]);
+
+  minimizer->Minimize();
+
+  tauMinuit.value = minimizer->X()[0];
+  tauMinuit.variance = minimizer->CovMatrix(0, 0);
+
+  cout << method << " estimate" << endl;
+  tauMinuit.Print();
+
+  auto funM = new TF1("funM", "[0] * exp(-x/[1])", 0, 1e-4);
+  funM->SetParameters(nEv / tauMinuit.value, tauMinuit.value);
+  funM->SetLineColor(4);
+  funM->SetNpx(10000);
+  funM->Draw("SAME");
+
+  return tauMinuit;
 }
