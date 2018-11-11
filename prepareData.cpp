@@ -30,6 +30,7 @@ void prepareData() {
 
   hist->SetStats(0);
   hist->SetMarkerStyle(20);
+  hist->SetLineColor(kBlack);
   hist->GetXaxis()->SetRangeUser(0, 1.1e-5);
   fun->SetLineColor(4);
 
