@@ -1,6 +1,6 @@
 #include "fitData.cpp"
 
-TTree *buildTree(unsigned int nEv, TF1* fun) {
+TTree *buildTree(unsigned int nEv, TF1 *fun) {
   auto tree = new TTree("Triggers", "Triggers");
 
   float t = 0, dt = 0;
@@ -37,26 +37,25 @@ void toyMC() {
   TH1F *sigmaM = new TH1F("sigmaM", ";#sigma (s);", 100, 0.5e-7, 2.e-7);
   TH1F *sigmaM2 = new TH1F("sigmaM2", ";#sigma (s);", 100, 0.5e-7, 2.e-7);
 
-
   for (int iExp = 0; iExp < nExp; iExp++) {
     auto tree = buildTree(N, fun);
 
     std::map<std::string, measurement> results = fitData(tree);
 
-    tauAn->Fill( results["analytical"].value );
-    tauLL->Fill( results["LL"].value );
-    tauM->Fill( results["Minuit"].value );
-    tauM2->Fill( results["Minuit2"].value );
+    tauAn->Fill(results["analytical"].value);
+    tauLL->Fill(results["LL"].value);
+    tauM->Fill(results["Minuit"].value);
+    tauM2->Fill(results["Minuit2"].value);
 
-    sigmaAn->Fill( results["analytical"].GetError() );
-    sigmaLL->Fill( results["LL"].GetError() );
-    sigmaM->Fill( results["Minuit"].GetError() );
-    sigmaM2->Fill( results["Minuit2"].GetError() );
+    sigmaAn->Fill(results["analytical"].GetError());
+    sigmaLL->Fill(results["LL"].GetError());
+    sigmaM->Fill(results["Minuit"].GetError());
+    sigmaM2->Fill(results["Minuit2"].GetError());
 
     delete tree;
   }
 
-  auto cc = new TCanvas("cc", "", 0, 0, 1600+4, 800+28);
+  auto cc = new TCanvas("cc", "", 0, 0, 1600 + 4, 800 + 28);
   cc->Divide(4, 2);
 
   cc->cd(1);
@@ -75,5 +74,4 @@ void toyMC() {
   sigmaM->Draw();
   cc->cd(8);
   sigmaM2->Draw();
-
 }
