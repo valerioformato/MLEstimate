@@ -24,7 +24,7 @@ void DivideByBinWidth(TH1 *hist) {
   }
 };
 
-std::map<std::string, measurement> fitData(TTree* tree) {
+std::map<std::string, measurement> fitData(TTree *tree) {
 
   std::map<std::string, measurement> map;
 
@@ -85,9 +85,10 @@ measurement fitScanLL(TTree *tree) {
   auto lfun = [](float _x, float _tau) { return 1. / _tau * exp(-_x / _tau); };
   double ll = 0;
   float tauStart = 2e-6, tauEnd = 2.8e-6, dtau = 1e-10;
+  // looping over a std::vector is way faster than looping over a TTree
   for (float tauThis = tauStart; tauThis <= tauEnd; tauThis += dtau) {
     ll = 0;
-    for( auto tIt : tvec ){
+    for (auto tIt : tvec) {
       ll += log(lfun(tIt, tauThis));
     }
     logL->SetPoint(logL->GetN(), tauThis, ll);
@@ -120,14 +121,18 @@ measurement fitScanLL(TTree *tree) {
 }
 
 measurement fitMinuit(TTree *tree, std::string method) {
-  //create wrapper class for lilelihood
+  // create wrapper class for likelihood
   class LL {
   public:
-    LL(TTree *tree) : _tree(tree){ Init(); };
+    LL(TTree *tree) : _tree(tree) { Init(); };
 
-    void SetTree(TTree *tree) { _tree = tree; Init(); };
+    void SetTree(TTree *tree) {
+      _tree = tree;
+      Init();
+    };
 
-    void Init(){
+    // looping over a std::vector is way faster than looping over a TTree
+    void Init() {
       float t;
       _tree->SetBranchAddress("time", &t);
       Long64_t nEv = _tree->GetEntries();
@@ -138,10 +143,10 @@ measurement fitMinuit(TTree *tree, std::string method) {
       }
     }
 
-    //this is particularly important
+    // this is particularly important
     double operator()(const double *_tau) {
       double ll = 0;
-      for( auto tIt : tvec ){
+      for (auto tIt : tvec) {
         ll -= log(1. / *_tau * exp(-tIt / *_tau));
       }
       return ll;
