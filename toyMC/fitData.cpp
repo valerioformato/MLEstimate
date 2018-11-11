@@ -1,5 +1,3 @@
-float tau = 2.2e-6;
-
 struct measurement {
   std::string name;
   float value = 0;
@@ -26,57 +24,23 @@ void DivideByBinWidth(TH1 *hist) {
   }
 };
 
-auto infile = std::unique_ptr<TFile>(TFile::Open("data/data.root"));
+std::map<std::string, measurement> fitData(TTree* tree) {
 
-void fitData() {
+  std::map<std::string, measurement> map;
 
-  auto hist = new TH1F("hist", ";t (s);Counts", 1000, 0, 1e-4);
-  auto tree = (TTree *)infile->Get("Triggers");
   float t;
   tree->SetBranchAddress("time", &t);
   Long64_t nEv = tree->GetEntries();
   for (Long64_t iEv = 0; iEv < nEv; iEv++) {
     tree->GetEntry(iEv);
-    hist->Fill(t);
   }
 
-  DivideByBinWidth(hist);
-  hist->SetStats(0);
-  hist->SetMarkerStyle(20);
-  hist->SetLineColor(kBlack);
-  hist->GetXaxis()->SetRangeUser(0, 1.1e-5);
+  map["analytical"] = fitAnalytical(tree);
+  map["LL"] = fitScanLL(tree);
+  map["Minuit"] = fitMinuit(tree, "Minuit");
+  map["Minuit2"] = fitMinuit(tree, "Minuit2");
 
-  auto fun = new TF1("fun", "[0] * exp(-x/[1])", 0, 1e-4);
-  fun->SetParameters(nEv / tau, tau);
-  fun->SetNpx(10000);
-
-  auto ccA = new TCanvas("ccA", "Analytical solution");
-  ccA->Draw();
-  hist->Draw("E");
-  fun->Draw("SAME");
-  auto tauAn = fitAnalytical(tree);
-  ccA->Print("plots/plot2_An.pdf");
-
-  auto ccL = new TCanvas("ccL", "LogLikelihood scan");
-  ccL->Draw();
-  hist->Draw("E");
-  fun->Draw("SAME");
-  auto tauLL = fitScanLL(tree);
-  ccL->Print("plots/plot2_LL.pdf");
-
-  auto ccM = new TCanvas("ccM", "Minuit");
-  ccM->Draw();
-  hist->Draw("E");
-  fun->Draw("SAME");
-  auto tauMinuit = fitMinuit(tree, "Minuit");
-  ccM->Print("plots/plot2_Minuit.pdf");
-
-  auto ccM2 = new TCanvas("ccM2", "Minuit");
-  ccM2->Draw();
-  hist->Draw("E");
-  fun->Draw("SAME");
-  auto tauMinuit2 = fitMinuit(tree, "Minuit2");
-  ccM2->Print("plots/plot2_Minuit2.pdf");
+  return map;
 }
 
 measurement fitAnalytical(TTree *tree) {
@@ -98,12 +62,6 @@ measurement fitAnalytical(TTree *tree) {
   cout << "Analytical estimate" << endl;
   tauML.Print();
 
-  auto funA = new TF1("funA", "[0] * exp(-x/[1])", 0, 1e-4);
-  funA->SetParameters(nEv / tauML.value, tauML.value);
-  funA->SetLineColor(4);
-  funA->SetNpx(10000);
-  funA->Draw("SAME");
-
   return tauML;
 }
 
@@ -112,11 +70,15 @@ measurement fitScanLL(TTree *tree) {
 
   float t;
   tree->SetBranchAddress("time", &t);
+  Long64_t nEv = tree->GetEntries();
+  std::vector<float> tvec(nEv);
+  for (Long64_t iEv = 0; iEv < nEv; iEv++) {
+    tree->GetEntry(iEv);
+    tvec[iEv] = t;
+  }
 
   measurement tauLL;
   tauLL.name = "tau";
-
-  Long64_t nEv = tree->GetEntries();
 
   TGraph *logL = new TGraph();
 
@@ -125,10 +87,8 @@ measurement fitScanLL(TTree *tree) {
   float tauStart = 2e-6, tauEnd = 2.8e-6, dtau = 1e-10;
   for (float tauThis = tauStart; tauThis <= tauEnd; tauThis += dtau) {
     ll = 0;
-    for (Long64_t iEv = 0; iEv < nEv; iEv++) {
-      tree->GetEntry(iEv);
-
-      ll += log(lfun(t, tauThis));
+    for( auto tIt : tvec ){
+      ll += log(lfun(tIt, tauThis));
     }
     logL->SetPoint(logL->GetN(), tauThis, ll);
   }
@@ -150,38 +110,11 @@ measurement fitScanLL(TTree *tree) {
       t2 = logL->GetX()[ip];
     }
   }
-  // cout << t1 << " " << t2 << endl;
 
   tauLL.variance = pow(0.5 * (t2 - t1), 2);
 
   cout << "LogLikelihood scan estimate" << endl;
   tauLL.Print();
-
-  _canvas->cd(1);
-  auto funLL = new TF1("funLL", "[0] * exp(-x/[1])", 0, 1e-4);
-  funLL->SetParameters(nEv / tauLL.value, tauLL.value);
-  funLL->SetLineColor(4);
-  funLL->SetNpx(10000);
-  funLL->Draw("SAME");
-
-  auto _cc = new TCanvas();
-  float miny = std::min(logL->Eval(2.1e-6), logL->Eval(2.65e-6));
-  logL->GetXaxis()->SetRangeUser(2.1e-6, 2.65e-6);
-  logL->GetYaxis()->SetRangeUser(miny, ll + 1);
-  logL->SetTitle(";#tau (s);logL");
-  logL->SetLineWidth(2);
-  logL->Draw("AL");
-
-  auto l1 = new TLine(tauLL.value, miny, tauLL.value, ll);
-  l1->SetLineColor(2);
-  l1->Draw("SAME");
-
-  auto l2 = new TLine(t1, ll - 0.5, t2, ll - 0.5);
-  l2->SetLineColor(2);
-  l2->SetLineStyle(2);
-  l2->Draw("SAME");
-
-  _cc->Print("plots/plot2_LLscan.pdf");
 
   return tauLL;
 }
@@ -190,25 +123,33 @@ measurement fitMinuit(TTree *tree, std::string method) {
   //create wrapper class for lilelihood
   class LL {
   public:
-    LL(TTree *tree) : _tree(tree){};
+    LL(TTree *tree) : _tree(tree){ Init(); };
 
-    void SetTree(TTree *tree) { _tree = tree; };
+    void SetTree(TTree *tree) { _tree = tree; Init(); };
+
+    void Init(){
+      float t;
+      _tree->SetBranchAddress("time", &t);
+      Long64_t nEv = _tree->GetEntries();
+      tvec.reserve(nEv);
+      for (Long64_t iEv = 0; iEv < nEv; iEv++) {
+        _tree->GetEntry(iEv);
+        tvec.push_back(t);
+      }
+    }
 
     //this is particularly important
     double operator()(const double *_tau) {
       double ll = 0;
-      float t = 0;
-      _tree->SetBranchAddress("time", &t);
-      Long64_t nEv = _tree->GetEntries();
-      for (Long64_t iEv = 0; iEv < nEv; iEv++) {
-        _tree->GetEntry(iEv);
-        ll -= log(1. / *_tau * exp(-t / *_tau));
+      for( auto tIt : tvec ){
+        ll -= log(1. / *_tau * exp(-tIt / *_tau));
       }
       return ll;
     }
 
   private:
     TTree *_tree;
+    std::vector<float> tvec;
   };
 
   auto lfun = new LL(tree);
@@ -237,12 +178,6 @@ measurement fitMinuit(TTree *tree, std::string method) {
 
   cout << method << " estimate" << endl;
   tauMinuit.Print();
-
-  auto funM = new TF1("funM", "[0] * exp(-x/[1])", 0, 1e-4);
-  funM->SetParameters(nEv / tauMinuit.value, tauMinuit.value);
-  funM->SetLineColor(4);
-  funM->SetNpx(10000);
-  funM->Draw("SAME");
 
   return tauMinuit;
 }
