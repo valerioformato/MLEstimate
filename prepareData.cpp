@@ -16,14 +16,13 @@ void prepareData() {
   float t = 0, dt = 0;
   tree->Branch("time", &t);
 
-  Long64_t nEv = gRandom->Poisson(10000);
+  Long64_t nEv = gRandom->Poisson(500);
   cout << "Generating " << nEv << " events" << endl;
 
   for (Long64_t iEv = 0; iEv < nEv; iEv++) {
-    dt = fun->GetRandom();
-    hist->Fill(dt);
+    t = fun->GetRandom();
+    hist->Fill(t);
 
-    t += dt;
     tree->Fill();
   }
 
@@ -35,8 +34,8 @@ void prepareData() {
   fun->SetLineColor(4);
 
   hist->Draw("E");
-  fun->SetParameter(0, nEv/tau*hist->GetBinWidth(1));
-  fun->Draw("SAME");
+  // fun->SetParameter(0, nEv / tau * hist->GetBinWidth(1));
+  // fun->Draw("SAME");
 
   cc->Print("plots/plot1.pdf");
 
