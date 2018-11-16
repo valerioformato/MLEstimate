@@ -12,9 +12,9 @@ struct measurement {
   }
 };
 
-measurement fitAnalytical(TTree *tree, TH1* hist);
-measurement fitScanLL(TTree *tree, TH1* hist);
-measurement fitMinuit(TTree *tree, TH1* hist, std::string version);
+measurement fitAnalytical(TTree *tree, TH1 *hist);
+measurement fitScanLL(TTree *tree, TH1 *hist);
+measurement fitMinuit(TTree *tree, TH1 *hist, std::string version);
 measurement fitRoot(TH1 *hist, TString opt);
 
 void DivideByBinWidth(TH1 *hist) {
@@ -41,7 +41,7 @@ void fitData() {
     hist->Fill(t);
   }
 
-  auto hist_orig = (TH1F*) hist->Clone("hist_orig");
+  auto hist_orig = (TH1F *)hist->Clone("hist_orig");
   cout << hist_orig->GetSumOfWeights() << endl;
 
   // DivideByBinWidth(hist);
@@ -97,7 +97,7 @@ void fitData() {
   ccR2->Print("plots/plot2_Root_ChiSquare.pdf");
 }
 
-measurement fitAnalytical(TTree *tree, TH1* hist) {
+measurement fitAnalytical(TTree *tree, TH1 *hist) {
   float t;
   tree->SetBranchAddress("time", &t);
 
@@ -125,7 +125,7 @@ measurement fitAnalytical(TTree *tree, TH1* hist) {
   return tauML;
 }
 
-measurement fitScanLL(TTree *tree, TH1* hist) {
+measurement fitScanLL(TTree *tree, TH1 *hist) {
   TCanvas *_canvas = (TCanvas *)gROOT->FindObject("ccL");
 
   float t;
@@ -204,7 +204,7 @@ measurement fitScanLL(TTree *tree, TH1* hist) {
   return tauLL;
 }
 
-measurement fitMinuit(TTree *tree, TH1* hist, std::string method) {
+measurement fitMinuit(TTree *tree, TH1 *hist, std::string method) {
   // create wrapper class for lilelihood
   class LL {
   public:
@@ -273,7 +273,7 @@ measurement fitRoot(TH1 *hist, TString opt) {
   auto funR = new TF1("funR", "[0] / [1] * exp(-x/[1])", 0, 1e-5);
   funR->SetParameters(1e-7, 1e-7);
 
-  hist->Fit(funR, opt+"N");
+  hist->Fit(funR, opt + "N");
 
   tauRoot.value = funR->GetParameter(1);
   tauRoot.variance = pow(funR->GetParError(1), 2);
